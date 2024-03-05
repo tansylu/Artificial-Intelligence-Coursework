@@ -57,12 +57,12 @@ bool solveSudoku(vector<vector<int>>& sudoku) {
     auto start = chrono::high_resolution_clock::now();
     for (int row = 0; row < 9; row++) {
         for (int col = 0; col < 9; col++) {
-            if (sudoku[row][col] == 0) {
-                for (int num = 1; num <= 9; num++) {
-                    if (isPossible(sudoku, row, col, num)) {
-                        sudoku[row][col] = num;
-                        if (solveSudoku(sudoku)) {
-                            auto stop = chrono::high_resolution_clock::now(); // Stop timer
+            if (sudoku[row][col] == 0) { // empty spot found
+                for (int num = 1; num <= 9; num++) {//iterate 1-9
+                    if (isPossible(sudoku, row, col, num)) {// try to see if the number fits
+                        sudoku[row][col] = num;// set the cell
+                        if (solveSudoku(sudoku)) { // recurse to solve rest of sudoku with this update
+                            auto stop = chrono::high_resolution_clock::now(); 
                             auto duration = chrono::duration_cast<chrono::seconds>(stop - start);
                             if(duration.count()>0)cout << "Took more than 1 second: " << duration.count() << "seconds" << endl;
                             return true;
@@ -70,10 +70,10 @@ bool solveSudoku(vector<vector<int>>& sudoku) {
                         sudoku[row][col] = 0; 
                     }
                 }
-                return false; 
+                return false; //tried every number and none worked
             }
         }
-    }
+    }//terminates when no more empty spots found
     return true; 
 }
 
@@ -127,8 +127,8 @@ int main() {
             continue;
         }
         else{
-            //flag = validateSudoku(sudoku);
-            //cout << flag<<endl;
+            flag = validateSudoku(sudoku);
+            cout << flag<<endl;
             for (vector<int> row : sudoku) {
                 for (int cell : row) {
                     cout << cell << " ";

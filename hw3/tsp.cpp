@@ -5,6 +5,8 @@
 #include <cstdlib>
 #include <math.h>
 #include <set>
+#include <algorithm>
+#include <chrono>
 using namespace std;
 
 struct Location {
@@ -18,31 +20,8 @@ struct Individual {
     double distance;
 };
 
-vector<int> shuffler(const vector<int>& default_order) {
-    vector<int> shuffled_order = default_order; 
-    srand(time(0));
-
-    for (int i = shuffled_order.size() - 1; i > 0; --i) {
-        int j = rand() % (i + 1); 
-        swap(shuffled_order[i], shuffled_order[j]); 
-    }
-
-    return shuffled_order;
-}
-
- double fitness_score(const vector<int>& order, const vector<Location>& locations) {
-    double score = 0;
-    for (int i = 0; i < order.size() - 1; ++i) {
-        score += sqrt(pow(locations[order[i]].x - locations[order[i + 1]].x, 2) + pow(locations[order[i]].y - locations[order[i + 1]].y, 2));
-    }
-    return 1/score;
-
- }
-
-
-
-Individual tournament(const std::vector<Individual>& population, std::vector<Location>& locations) {
-    int k = 5;
+Individual tournament(const std::vector<Individual>& population) {
+    int k = 5; 
     Individual best;
     bool flag = true;
     std::set<int> selectedIndexes;
@@ -64,6 +43,25 @@ Individual tournament(const std::vector<Individual>& population, std::vector<Loc
     return best;
 }
 
+vector<int> shuffler(vector<int>order) {
+    int size = order.size();
+    for (int i = 0; i < size; ++i) {
+        int swapWith = i + rand() / (RAND_MAX / (size - i) + 1);
+        swap(order[i], order[swapWith]);
+    }
+    return order;
+}
+
+double fitnessScore(const vector<int>& order, const vector<Location>& locations) {
+    double score = 0;
+    for (int i = 0; i < order.size() - 1; ++i) {
+        score += sqrt(pow(locations[order[i+1]].x - locations[order[i]].x, 2) + pow(locations[order[i+1]].y - locations[order[i]].y, 2));
+    }
+
+    score += sqrt(pow(locations[order[0]].x - locations[order.back()].x, 2) + pow(locations[order[0]].y - locations[order.back()].y, 2));
+    return score;
+}
+
 vector<Location> parse(const string& filename) {
     vector<Location> locations;
     ifstream inputFile(filename);
@@ -83,39 +81,107 @@ vector<Location> parse(const string& filename) {
     return locations;
 }
 
-vector<Individual> initPopulation(const vector<int>& default_order, int n, vector<Location>& locations, Individual& best) {
+vector<Individual> initPopulation(const vector<int>& defaultOrder, int n, const vector<Location>& locations, Individual& best) {
     vector<Individual> population;
-     double distance, best_distance = 10000;
-
+    double distance, bestDistance = 100000;
     for (int i = 0; i < n; ++i) {
-        vector<int> new_order = shuffler(default_order);
-        distance = fitness_score(new_order, locations); 
-        if(distance < best_distance) {
-            best_distance = distance;
-            best.order = new_order;
+        vector<int> newOrder =  shuffler(defaultOrder);
+        distance = fitnessScore(newOrder, locations);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best.order = newOrder;
             best.distance = distance;
-        };
-        population.push_back({new_order, distance});
+        }
+        population.push_back({newOrder, distance});
     }
-
     return population;
 }
 
-int main() {
-    vector<Location> locations = parse("input.txt");
+vector<int> crossover(const vector<int>& parent1, const vector<int>& parent2) {
+    int size = parent1.size();
 
-    for (const auto& location : locations) {
-        cout << "ID: " << location.id << ", X: " << location.x << ", Y: " << location.y << endl;
+    int start = rand() % size;
+    int end = rand() % size;
+    if (start > end) swap(start, end);
+
+    vector<int> offspring(size, -1);
+    for (int i = start; i <= end; ++i) {
+        offspring[i] = parent1[i];
     }
 
-    vector<int> default_order(locations.size());
-    for (int i = 0; i < locations.size(); ++i) {
-        default_order[i] = i;
-    }
-    Individual best;
-    vector<Individual> population = initPopulation(default_order, 10, locations, best);
+    for (int i = 0, j = 0; i < size && j < size; ++j) {
 
-    int generation = 0;
-    return 0;
+        if (find(offspring.begin(), offspring.end(), parent2[j]) != offspring.end()) continue;
+
+        while (offspring[i] != -1) i++; 
+        offspring[i++] = parent2[j];
+    }
+
+    return offspring;
 }
 
+vector<int> mutateInsert(vector<int> order) {
+    int i = rand() % order.size();
+    int j;
+    do {
+        j = rand() % order.size();
+    } while (i == j);
+    int gene = order[i];
+    order.erase(order.begin() + i);
+    order.insert(order.begin() + j, gene);
+    return order;
+}
+
+void runGeneticAlgorithm(vector<Individual>& population, const vector<Location>& locations, Individual& best, int generationsTotal, int elite) {
+    double mutRate = 0.20; 
+    for (int generation = 0; generation < generationsTotal; ++generation) {
+        vector<Individual> newPopulation;
+        sort(population.begin(), population.end(), [](const Individual& a, const Individual& b) { return a.distance < b.distance; });
+        for (int i = 0; i < elite; ++i) {
+            newPopulation.push_back(population[i]);
+        }
+        for (int i = elite; i < population.size(); ++i) {
+            Individual parent1 = tournament(population);
+            Individual parent2 = tournament(population);
+            vector<int> childOrder = crossover(parent1.order, parent2.order);
+            if ((double)rand() / RAND_MAX < mutRate) {
+                childOrder = mutateInsert(childOrder); 
+            }
+            double childDistance = fitnessScore(childOrder, locations);
+            newPopulation.push_back({childOrder, childDistance});
+        }
+        population = newPopulation;
+        for (const Individual& individual : population) {
+            if (individual.distance < best.distance) {
+                best = individual;
+                 cout << "Generation: " << generation << "\n"; 
+                cout << "Best distance so far: " << best.distance << "\n"; 
+            }
+        }
+      
+    }
+}
+
+int main() {
+    unsigned seed = chrono::high_resolution_clock::now().time_since_epoch().count();
+    std::srand(seed);
+    vector<Location> locations = parse("input.txt");
+    vector<int> defaultOrder(locations.size());
+    for (int i = 0; i < locations.size(); ++i) {
+        defaultOrder[i] = i;
+    }
+    Individual best;
+    int totalCalcs = 250000;
+    int generationsTotal = 1000; 
+    int populationSize = totalCalcs / generationsTotal; 
+    vector<Individual> population = initPopulation(defaultOrder, populationSize, locations, best);
+    cout << "Initial best distance: " << best.distance << "\n"; 
+    runGeneticAlgorithm(population, locations, best, generationsTotal, populationSize / 10); 
+    cout << "Final best distance: " << best.distance << "\n"; 
+    cout << "Best order: ";
+    for (int i : best.order) {
+        cout << i << " ";
+    }
+    cout << "\n";
+    return 0;
+}
