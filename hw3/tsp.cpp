@@ -152,6 +152,7 @@ void runGeneticAlgorithm(vector<Individual>& population, const vector<Location>&
         }
         population = newPopulation;
         for (const Individual& individual : population) {
+            // cout << individual.distance<<" "<< generation<<endl;
             if (individual.distance < best.distance) {
                 best = individual;
                  cout << "Generation: " << generation << "\n"; 
